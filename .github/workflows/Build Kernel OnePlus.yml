@@ -1265,7 +1265,7 @@ jobs:
             set_config "CONFIG_NETFILTER_XT_MATCH_RECENT=y"
           fi
 
-          # IPSET & IPv6_NAT配置*
+          # IPSET & IPv6_NAT & TTL配置*
           if [ "${{ github.event.inputs.NETFILTER }}" = "true" ]; then
             if [[ "$KERNEL_VERSION" != "6.12" && "${CPU}" != mt* ]]; then
               set_config "CONFIG_BPF_STREAM_PARSER=y"
@@ -1292,8 +1292,16 @@ jobs:
             set_config "CONFIG_IP_SET_LIST_SET=y"
             set_config "CONFIG_IP6_NF_NAT=y"
             set_config "CONFIG_IP6_NF_TARGET_MASQUERADE=y"
+            set_config "CONFIG_NETFILTER_XT_TARGET_HL=y"
+            set_config "CONFIG_IP_NF_TARGET_TTL=y"
+            set_config "CONFIG_IP6_NF_TARGET_HL=y"
+            set_config "CONFIG_NETFILTER_XT_MATCH_HL=y"
+            set_config "CONFIG_IP_NF_MATCH_TTL=y"
+            set_config "CONFIG_IP6_NF_MATCH_HL=y"
+            set_config "CONFIG_IP_NF_MANGLE=y"
+            set_config "CONFIG_IP6_NF_MANGLE=y"
           fi
-
+          
           # 构建依赖项调整及优化
           if [[ "$ENABLE_RUST" == "true" ]]; then
             set_config "CONFIG_RUST=y"
