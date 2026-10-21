@@ -814,6 +814,56 @@ jobs:
             s = s[:a] + part + s[b:]
 
           p.write_text(s)
+
+          
+          # Make BakaSU's existing SELinux handlers available to SUSFS.
+          p = Path("../KernelSU/kernel/feature/selinux_hide.c")
+          s = p.read_text()
+
+          s = s.replace(
+            "#ifndef KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE\n",
+            "#if 1\n", 1
+          )
+          s = s.replace(
+            "static ssize_t my_write_context(",
+            "ssize_t my_write_context(", 1
+          )
+          s = s.replace(
+            "static ssize_t my_write_access(",
+            "ssize_t my_write_access(", 1
+          )
+          s = s.replace(
+            "#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && !defined(KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE)",
+            "#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)", 1
+          )
+          s = s.replace(
+            "#endif // #ifndef KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE\n",
+            "#endif\n"
+            "#ifdef KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE\n"
+            "#define ksu_selinux_hide_unhook() do {} while (0)\n"
+            "#endif\n", 1
+          )
+          p.write_text(s)
+
+          # SUSFS calls my_setprocattr, but BakaSU's equivalent
+          # is named ksu_handle_selinux_setprocattr.
+          p = Path("security/selinux/hooks.c")
+          s = p.read_text().replace(
+            "my_setprocattr",
+            "ksu_handle_selinux_setprocattr"
+          )
+          p.write_text(s)
+
+          # SUSFS's newer patch adds preinit calls that BakaSU
+          # doesn't implement. Disable only those unsupported calls.
+          p = Path("fs/exec.c")
+          s = p.read_text().replace(
+            "#include <linux/susfs_def.h>",
+            "#include <linux/susfs_def.h>\n#define KSU_NO_PREINIT",
+            1
+          )
+          p.write_text(s)
+
           PY
             fi
 
