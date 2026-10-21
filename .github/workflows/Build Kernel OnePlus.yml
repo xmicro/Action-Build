@@ -818,14 +818,13 @@ jobs:
           
           # Make BakaSU's existing SELinux handlers available to SUSFS.
           p = Path("../KernelSU/kernel/feature/selinux_hide.c")
+          s = p.read_text()
           
           s = s.replace(
             "#ifndef KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE\n/*\n * Caveat:",
             "#if 1\n/*\n * Caveat:",
             1
           )
-
-          s = p.read_text()
 
           s = s.replace(
             "#ifndef KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE\n",
