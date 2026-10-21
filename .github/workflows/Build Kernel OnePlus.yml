@@ -751,11 +751,76 @@ jobs:
             echo "fix_5.15_patch完成"
           fi
 
+          
           if [ "${{ github.event.inputs.SUSFS_META }}" != "-1" ]; then
             echo "正在打susfs补丁"
             patch -p1 < 50_add_susfs_in_gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
+
+            if [[ "$KMI" == "android16-6.12" && "$SUBLEVEL" -lt 58 ]]; then
+              python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("fs/exec.c")
+          s = p.read_text()
+          if "#include <linux/susfs_def.h>" not in s:
+            s = s.replace(
+              "#include <linux/ksm.h>\n",
+              "#include <linux/ksm.h>\n"
+              "#ifdef CONFIG_KSU_SUSFS\n"
+              "#include <linux/susfs_def.h>\n"
+              "#endif\n", 1
+            )
+            p.write_text(s)
+
+          p = Path("fs/proc/task_mmu.c")
+          s = p.read_text()
+
+          a = s.index("static int show_smap(")
+          b = s.index("static int show_smaps_rollup(", a)
+          part = s[a:b]
+          if "SUSFS_IS_INODE_SUS_MAP" not in part:
+            part = part.replace(
+              "\tif (!vma_pages(vma))",
+              "#ifdef CONFIG_KSU_SUSFS_SUS_MAP\n"
+              "\tif (vma->vm_file && "  
+          "SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))\n"
+              "\t\treturn 0;\n"
+              "#endif\n\n"
+              "\tif (!vma_pages(vma))", 1
+            )
+            s = s[:a] + part + s[b:]
+
+          a = s.index("static int show_smaps_rollup(")
+          b = s.index("\nempty_set:", a)
+          part = s[a:b]
+
+          if "SUSFS_IS_INODE_SUS_MAP" not in part:
+            def guard(m):
+              i, call = m.groups()
+              return (
+                f"{i}#ifdef CONFIG_KSU_SUSFS_SUS_MAP\n"
+                f"{i}if (!vma->vm_file || "
+                " !SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))\n"
+                f"{i}#endif\n"
+                f"{i}{call}"
+              )
+
+            part = re.sub(
+              r"(?m)^([ \t]*)(smap_gather_stats\(vma, &mss, "
+              r"(?:0|last_vma_end)\);)$",
+              guard, part
+            )
+            s = s[:a] + part + s[b:]
+
+          p.write_text(s)
+          PY
+            fi
+
             echo "susfs_patch完成"
           fi
+
+
           source $REJ_CHECKER
           check_rejects .
 
