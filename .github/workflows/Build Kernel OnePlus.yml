@@ -764,7 +764,67 @@ jobs:
         run: |
           kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/PatchFakePatches.kts" postfix "$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/common"
           kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/PatchFakePatches.kts" revert "$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/common"
+      
+      - name: Repair OnePlus 15 SuSFS 6.12 patches
+        if: ${{ github.event.inputs.FILE == 'oneplus_15' && github.event.inputs.SUSFS_META != '-1' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
 
+          root = Path(os.environ["GITHUB_WORKSPACE"]) / "kernel_workspace/kernel_platform/common"
+
+          def add_after(rel, anchor, addition):
+              path = root / rel
+              data = path.read_text()
+              if addition in data:
+                  return
+              if data.count(anchor) != 1:
+                  raise SystemExit(f"Unexpected source layout: {rel}")
+              path.write_text(data.replace(anchor, anchor + addition, 1))
+
+          # Repair the rejected include in fs/exec.c
+          add_after(
+              "fs/exec.c",
+              "#include <linux/ksm.h>\n",
+              "#ifdef CONFIG_KSU_SUSFS\n"
+              "#include <linux/susfs_def.h>\n"
+              "#endif\n",
+          )
+
+          # Preserve SUS_MAP filtering in smaps and smaps_rollup
+          add_after(
+              "fs/proc/task_mmu.c",
+              "\tunsigned long end = VMA_PAD_START(vma);\n",
+              "\n#ifdef CONFIG_KSU_SUSFS_SUS_MAP\n"
+              "\tif (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))\n"
+              "\t\treturn;\n"
+              "#endif\n",
+          )
+
+          add_after(
+              "fs/proc/task_mmu.c",
+              "static int show_smap(struct seq_file *m, void *v)\n"
+              "{\n"
+              "\tstruct vm_area_struct *vma = v;\n"
+              "\tstruct mem_size_stats mss = {};\n",
+              "\n#ifdef CONFIG_KSU_SUSFS_SUS_MAP\n"
+              "\tif (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))\n"
+              "\t\treturn 0;\n"
+              "#endif\n",
+          )
+
+          # Remove only the two rejects repaired above
+          for rel in ("fs/exec.c.rej", "fs/proc/task_mmu.c.rej"):
+              (root / rel).unlink(missing_ok=True)
+
+          remaining = list(root.rglob("*.rej"))
+          if remaining:
+              raise SystemExit(f"Unfixed SuSFS patch rejects: {remaining}")
+
+          print("OnePlus 15 SuSFS repairs applied; SUS_MAP remains enabled")
+    
+          PY
       # OGKI转换GKI，无需修改 dtbo 开机
       - name: Apply Convert HMBIRD_OGKI to HMBIRD_GKI
         if: ${{ (fromJSON(env.VERSIONLEVEL) > 6 || (fromJSON(env.VERSIONLEVEL) == 6 && fromJSON(env.PATCHLEVEL) >= 6)) && github.event.inputs.SCHED_HMBIRD == 'false' }}
