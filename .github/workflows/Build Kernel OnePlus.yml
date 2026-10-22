@@ -687,10 +687,6 @@ jobs:
             git checkout "$MANUAL_HASH"
           fi
           
-          git fetch https://github.com/xmicro/BakaSU.git sync-susfs
-          git checkout --detach 0e5b14206b0ee2fa9d8ce62f4b351ad01e2ea4cc
-          echo "Using BakaSU commit: $(git rev-parse HEAD)"
-
           KSU_VERSION=$(expr $(git rev-list --count "$KSU_MANAGER_BRANCH" 2>/dev/null || echo 13000) + 30700)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           if [ "$FAST_BUILD" = "false" ]; then
