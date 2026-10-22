@@ -825,16 +825,6 @@ jobs:
             s = s[:a] + part + s[b:]
 
           p.write_text(s)
-
-          # BakaSU does not yet implement the preinit API
-          # referenced by the newer SUSFS patch.
-          p = Path("fs/exec.c")
-          s = p.read_text().replace(
-            "#include <linux/susfs_def.h>",
-            "#include <linux/susfs_def.h>\n#define KSU_NO_PREINIT",
-            1
-          )
-          p.write_text(s)
           PY
             fi
 
